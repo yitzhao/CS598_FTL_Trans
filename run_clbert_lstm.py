@@ -14,7 +14,7 @@ from sklearn.model_selection import train_test_split
 from pytorch_transformers import BertTokenizer, BertConfig
 from pytorch_pretrained_bert.optimization import BertAdam
 from modeling_readmission import BertModel
-from modeling_patient import FTLSTMLayer
+from modeling_patient import LSTMLayer
 from tqdm import tqdm, trange
 import pandas as pd
 import io
@@ -23,8 +23,8 @@ import matplotlib.pyplot as plt
 from dotmap import DotMap
 from torch import nn
 import re
-from other_func import write_log, Tokenize_with_note_id_hour, concat_by_id_list_with_note_chunk_id_time
-from other_func import convert_note_ids, flat_accuracy, write_performance, reorder_by_time
+from other_func import write_log, Tokenize_with_note_id, concat_by_id_list_with_note_chunk_id, convert_note_ids, \
+    flat_accuracy, write_performance, reorder_by_time
 from utils import time_batch_generator
 
 
@@ -89,7 +89,7 @@ def main():
                         help="The embedding type selected in the list: all, note, chunk, no.")
 
     parser.add_argument("--task_name",
-                        default="FTLSTM_with_ClBERT_mortality",
+                        default="LSTM_with_ClBERT_mortality",
                         type=str,
                         required=True,
                         help="The name of the task.")
@@ -146,7 +146,6 @@ def main():
 
     config = DotMap()
     config.hidden_dropout_prob = 0.1
-    config.layer_norm_eps = 1e-12
     config.initializer_range = 0.02
     config.max_note_position_embedding = 1000
     config.max_chunk_position_embedding = 1000
@@ -157,29 +156,29 @@ def main():
 
     config.task_name = args.task_name
 
-    write_log(("New Job Start! \n"
+    write_log(("New Job Start!\n"
                "Data directory: {}, Directory Code: {}, Save Model: {}\n"
                "Output_dir: {}, Task Name: {}, embed_mode: {}\n"
                "max_seq_length: {},  max_chunk_num: {}\n"
                "train_batch_size: {}, eval_batch_size: {}\n"
-               "learning_rate: {}, warmup_proportion: {}\n"
+               "learning_rate: {}, warmup_proportion: {} \n"
                "num_train_epochs: {}, seed: {}, gradient_accumulation_steps: {}\n"
-               "FTLSTM Model's lstm_layers: {}").format(args.data_dir,
-                                                        args.data_dir.split('_')[-1],
-                                                        args.save_model,
-                                                        args.output_dir,
-                                                        config.task_name,
-                                                        config.embed_mode,
-                                                        args.max_seq_length,
-                                                        args.max_chunk_num,
-                                                        args.train_batch_size,
-                                                        args.eval_batch_size,
-                                                        args.learning_rate,
-                                                        args.warmup_proportion,
-                                                        args.num_train_epochs,
-                                                        args.seed,
-                                                        args.gradient_accumulation_steps,
-                                                        config.lstm_layers),
+               "LSTM Model's lstm_layers: {}").format(args.data_dir,
+                                                      args.data_dir.split('_')[-1],
+                                                      args.save_model,
+                                                      args.output_dir,
+                                                      config.task_name,
+                                                      config.embed_mode,
+                                                      args.max_seq_length,
+                                                      args.max_chunk_num,
+                                                      args.train_batch_size,
+                                                      args.eval_batch_size,
+                                                      args.learning_rate,
+                                                      args.warmup_proportion,
+                                                      args.num_train_epochs,
+                                                      args.seed,
+                                                      args.gradient_accumulation_steps,
+                                                      config.lstm_layers),
               LOG_PATH)
 
     content = "config setting: \n"
@@ -201,9 +200,7 @@ def main():
     train_df = pd.read_csv(train_file_path)
     val_df = pd.read_csv(val_file_path)
     test_df = pd.read_csv(test_file_path)
-    train_df = train_df.dropna()
-    val_df = val_df.dropna()
-    test_df = test_df.dropna() 
+
     random.seed(args.seed)
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
@@ -216,12 +213,10 @@ def main():
     train_df = reorder_by_time(train_df)
     val_df = reorder_by_time(val_df)
     test_df = reorder_by_time(test_df)
-    train_labels, train_inputs, train_masks, train_note_ids, train_times = Tokenize_with_note_id_hour(train_df, MAX_LEN,
-                                                                                                      tokenizer)
-    validation_labels, validation_inputs, validation_masks, validation_note_ids, validation_times = Tokenize_with_note_id_hour(
-        val_df, MAX_LEN, tokenizer)
-    test_labels, test_inputs, test_masks, test_note_ids, test_times = Tokenize_with_note_id_hour(test_df, MAX_LEN,
-                                                                                                 tokenizer)
+    train_labels, train_inputs, train_masks, train_note_ids = Tokenize_with_note_id(train_df, MAX_LEN, tokenizer)
+    validation_labels, validation_inputs, validation_masks, validation_note_ids = Tokenize_with_note_id(val_df, MAX_LEN,
+                                                                                                        tokenizer)
+    test_labels, test_inputs, test_masks, test_note_ids = Tokenize_with_note_id(test_df, MAX_LEN, tokenizer)
     write_log("Tokenize Finished!", LOG_PATH)
     train_inputs = torch.tensor(train_inputs)
     validation_inputs = torch.tensor(validation_inputs)
@@ -232,37 +227,30 @@ def main():
     train_masks = torch.tensor(train_masks)
     validation_masks = torch.tensor(validation_masks)
     test_masks = torch.tensor(test_masks)
-    train_times = torch.tensor(train_times)
-    validation_times = torch.tensor(validation_times)
-    test_times = torch.tensor(test_times)
     write_log(("train dataset size is %d,\n"
                "validation dataset size is %d,\n"
                "test dataset size is %d") % (len(train_inputs), len(validation_inputs), len(test_inputs)), LOG_PATH)
 
     (train_labels, train_inputs,
      train_masks, train_ids,
-     train_note_ids, train_chunk_ids, train_times) = concat_by_id_list_with_note_chunk_id_time(train_df, train_labels,
-                                                                                               train_inputs,
-                                                                                               train_masks,
-                                                                                               train_note_ids,
-                                                                                               train_times, MAX_LEN)
+     train_note_ids, train_chunk_ids) = concat_by_id_list_with_note_chunk_id(train_df, train_labels,
+                                                                             train_inputs, train_masks,
+                                                                             train_note_ids, MAX_LEN)
     (validation_labels, validation_inputs,
      validation_masks, validation_ids,
-     validation_note_ids, validation_chunk_ids,
-     validation_times) = concat_by_id_list_with_note_chunk_id_time(val_df, validation_labels,
-                                                                   validation_inputs, validation_masks,
-                                                                   validation_note_ids, validation_times,
-                                                                   MAX_LEN)
+     validation_note_ids, validation_chunk_ids) = concat_by_id_list_with_note_chunk_id(val_df, validation_labels,
+                                                                                       validation_inputs,
+                                                                                       validation_masks,
+                                                                                       validation_note_ids, MAX_LEN)
     (test_labels, test_inputs,
      test_masks, test_ids,
-     test_note_ids, test_chunk_ids, test_times) = concat_by_id_list_with_note_chunk_id_time(test_df, test_labels,
-                                                                                            test_inputs, test_masks,
-                                                                                            test_note_ids, test_times,
-                                                                                            MAX_LEN)
+     test_note_ids, test_chunk_ids) = concat_by_id_list_with_note_chunk_id(test_df, test_labels,
+                                                                           test_inputs, test_masks,
+                                                                           test_note_ids, MAX_LEN)
 
     model = BertModel.from_pretrained(args.bert_model).to(device)
     model.to(device)
-    lstm_layer = FTLSTMLayer(config=config, num_labels=1)
+    lstm_layer = LSTMLayer(config=config, num_labels=1)
     lstm_layer.to(device)
 
     if n_gpu > 1:
@@ -292,14 +280,13 @@ def main():
     epochs = args.num_train_epochs
 
     train_batch_generator = time_batch_generator(args.max_chunk_num, train_inputs, train_labels, train_masks,
-                                                 train_note_ids, train_chunk_ids, train_times)
+                                                 train_note_ids, train_chunk_ids)
     validation_batch_generator = time_batch_generator(args.max_chunk_num, validation_inputs, validation_labels,
-                                                      validation_masks, validation_note_ids, validation_chunk_ids,
-                                                      validation_times)
+                                                      validation_masks, validation_note_ids, validation_chunk_ids)
 
     write_log("Training start!", LOG_PATH)
     # trange is a tqdm wrapper around the normal python range
-    with torch.autograd.set_detect_anomaly(False):
+    with torch.autograd.set_detect_anomaly(True):
         for epoch in trange(epochs, desc="Epoch"):
 
             # Training
@@ -316,19 +303,17 @@ def main():
             tr_ids_num = len(train_ids)
             tr_batch_loss = []
             for step in range(tr_ids_num):
-                b_input_ids, b_labels, b_input_mask, b_note_ids, b_chunk_ids, b_times = next(train_batch_generator)
+                b_input_ids, b_labels, b_input_mask, b_note_ids, b_chunk_ids = next(train_batch_generator)
                 b_input_ids = b_input_ids.to(device)
                 b_input_mask = b_input_mask.to(device)
                 b_new_note_ids = convert_note_ids(b_note_ids).to(device)
                 b_chunk_ids = b_chunk_ids.unsqueeze(0).to(device)
                 b_labels = b_labels.to(device)
                 b_labels.resize_((1))
-                # _, whole_output = model(b_input_ids, token_type_ids=None, attention_mask=b_input_mask)
                 _, whole_output = model(b_input_ids, token_type_ids=None, attention_mask=b_input_mask)
                 whole_input = whole_output.unsqueeze(0)
                 b_new_note_ids = b_new_note_ids.unsqueeze(0)
-                b_times = b_times.unsqueeze(0).to(device)
-                loss, pred = lstm_layer(whole_input, b_times, b_new_note_ids, b_chunk_ids, b_labels)
+                loss, pred = lstm_layer(whole_input, b_new_note_ids, b_chunk_ids, b_labels)
 
                 if n_gpu > 1:
                     loss = loss.mean()  # mean() to average on multi-gpu.
@@ -361,8 +346,7 @@ def main():
             ev_ids_num = len(validation_ids)
             for step in range(ev_ids_num):
                 with torch.no_grad():
-                    b_input_ids, b_labels, b_input_mask, b_note_ids, b_chunk_ids, b_times = next(
-                        validation_batch_generator)
+                    b_input_ids, b_labels, b_input_mask, b_note_ids, b_chunk_ids = next(validation_batch_generator)
                     b_input_ids = b_input_ids.to(device)
                     b_input_mask = b_input_mask.to(device)
                     b_new_note_ids = convert_note_ids(b_note_ids).to(device)
@@ -371,8 +355,7 @@ def main():
                     _, whole_output = model(b_input_ids, token_type_ids=None, attention_mask=b_input_mask)
                     whole_input = whole_output.unsqueeze(0)
                     b_new_note_ids = b_new_note_ids.unsqueeze(0)
-                    b_times = b_times.unsqueeze(0).to(device)
-                    pred = lstm_layer(whole_input, b_times, b_new_note_ids, b_chunk_ids).detach().cpu().numpy()
+                    pred = lstm_layer(whole_input, b_new_note_ids, b_chunk_ids).detach().cpu().numpy()
                 label_ids = b_labels.numpy()
                 tmp_eval_accuracy = flat_accuracy(pred, label_ids)
                 eval_accuracy += tmp_eval_accuracy
@@ -457,8 +440,7 @@ def main():
             _, whole_output = model(b_input_ids, token_type_ids=None, attention_mask=b_input_mask)
             whole_input = whole_output.unsqueeze(0)
             b_new_note_ids = b_new_note_ids.unsqueeze(0)
-            b_times = test_times[step][-args.max_chunk_num:].unsqueeze(0).to(device)
-            pred = lstm_layer(whole_input, b_times, b_new_note_ids, b_chunk_ids).detach().cpu().numpy()
+            pred = lstm_layer(whole_input, b_new_note_ids, b_chunk_ids).detach().cpu().numpy()
         label_ids = b_labels.numpy()[0]
         predictions.append(pred)
         true_labels.append(label_ids)

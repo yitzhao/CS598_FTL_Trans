@@ -328,6 +328,7 @@ def main():
                 whole_input = whole_output.unsqueeze(0)
                 b_new_note_ids = b_new_note_ids.unsqueeze(0)
                 b_times = b_times.unsqueeze(0).to(device)
+                b_times = torch.ones_like(b_times,device=device)
                 loss, pred = lstm_layer(whole_input, b_times, b_new_note_ids, b_chunk_ids, b_labels)
 
                 if n_gpu > 1:
