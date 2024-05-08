@@ -1,6 +1,8 @@
 # CS598_FTL_Trans
 ## Main Files
 *Project.ipynb* summarizes the results of our experiments, analysis and todos.
+https://drive.google.com/drive/folders/1plvfq7C7iA1rEZCnVqzNF48tM0uSq1Tt?usp=drive_link is our main folder with checkpoints and results.
+https://drive.google.com/file/d/19ERN9piQvd4khvqml5n2gVxqwLe2ERdT/view?usp=drive_link is our video presentation.
 
 ## Setups
 ### Dataset
