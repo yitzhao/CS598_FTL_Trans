@@ -8,17 +8,18 @@ https://drive.google.com/file/d/19ERN9piQvd4khvqml5n2gVxqwLe2ERdT/view?usp=drive
 ### Dataset
 We use [MIMIC-III Clinical Database](https://physionet.org/content/mimiciii/1.4/). We refer users to the link for requesting access. 
 
-File system expected:
-```
-data/
-  test.csv
-  train.csv
-  val.csv
-```
+Since our experimented model including vanilla language model as well as hierachical models,
+different dataset pre-processing are needed.
+The datasets pre-processing script for language model (BERT, Clinical BERT) is included in the 
+notebook (https://github.com/yitzhao/CS598_FTL_Trans/blob/main/Project.ipynb).
+The dataset pre-processing for hierachical BERT and FTL-Trans can be found at https://github.com/yitzhao/CS598_FTL_Trans/blob/main/mimic_json.py and https://github.com/yitzhao/CS598_FTL_Trans/blob/main/preprocessing_FTL_Trans.ipynb respecively.
 
-### Pretraining
+
+### Pretrained Weights
 Pretrained Model
 In our paper, we initialize the transformer layer with [ClinicalBERT](https://github.com/kexinhuang12345/clinicalBERT/tree/master). We refer user to the link for requesting pre-trained model. You can also use some other pre-trained models, like [BERT](https://github.com/huggingface/transformers).
+
+
 
 ## Experiments
 Currently, we have done 5 experiments.
