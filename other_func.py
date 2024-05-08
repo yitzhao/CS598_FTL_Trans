@@ -73,7 +73,7 @@ def word_count_pre(df_less_n):
 def split_into_chunks(df, max_len):
     input_ids = df.Input_ID.apply(lambda x: x[1:-1].replace(' ', '').split(','))
     df_len = len(df)
-    Adm_ID, Note_ID, Input_ID, Label, chartdate, charttime, input_index = [], [], [], [], [], [] , []
+    Adm_ID, Note_ID, Input_ID, Label, chartdate, charttime = [], [], [], [], [], []
     for i in tqdm(range(df_len)):
         x = input_ids[i]
         n = int(len(x) / (max_len - 2))
@@ -112,7 +112,7 @@ def Tokenize(df, max_length, tokenizer):
     if 'TEXT' in df.columns:
         sen = df.TEXT.values
         labels = df.Label.values
-        sen = ["[CLS] " + x + " [SEP]" for x in sen]
+        sen = ["[CLS] " + str(x) + " [SEP]" for x in sen]
         tokenized_texts = [tokenizer.tokenize(x) for x in sen]
         print("First sentence tokenized")
         print(tokenized_texts[0])
@@ -136,7 +136,7 @@ def Tokenize_with_note_id(df, max_length, tokenizer):
     if 'TEXT' in df.columns:
         sen = df.TEXT.values
         labels = df.Label.values
-        sen = ["[CLS] " + x + " [SEP]" for x in sen]
+        sen = ["[CLS] " + str(x) + " [SEP]" for x in sen]
         tokenized_texts = [tokenizer.tokenize(x) for x in sen]
         print("First sentence tokenized")
         print(tokenized_texts[0])
@@ -163,7 +163,7 @@ def Tokenize_with_note_id_time(df, max_length, tokenizer):
     if 'TEXT' in df.columns:
         sen = df.TEXT.values
         labels = df.Label.values
-        sen = ["[CLS] " + x + " [SEP]" for x in sen]
+        sen = ["[CLS] " + str(x) + " [SEP]" for x in sen]
         tokenized_texts = [tokenizer.tokenize(x) for x in sen]
         print("First sentence tokenized")
         print(tokenized_texts[0])
@@ -194,7 +194,7 @@ def Tokenize_with_note_id_hour(df, max_length, tokenizer):
         #sen = sen.dropna()
         #labels = labels[sen.index]
         #sen = np.array(sen)
-        sen = ["[CLS] " + x + " [SEP]" for x in sen]
+        sen = ["[CLS] " + str(x) + " [SEP]" for x in sen]
         tokenized_texts = [tokenizer.tokenize(x) for x in sen]
         print("First sentence tokenized")
         print(tokenized_texts[0])
